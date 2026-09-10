@@ -11,6 +11,7 @@ from .widgets.param_panel import ParamPanel
 from .widgets.output_grid import OutputGrid
 from .widgets.dependency import DependencyDiagramWidget
 from .widgets.charts import ChartsWidget
+from .widgets.optimizer import OptimizerWidget
 
 
 def _scrollable(widget):
@@ -21,7 +22,7 @@ def _scrollable(widget):
 
 
 class MainWindow(QMainWindow):
-    PAGES = ["Overview", "Control Deck", "Dependency Mapping", "Charts"]
+    PAGES = ["Overview", "Control Deck", "Optimizer", "Dependency Mapping", "Charts"]
 
     def __init__(self):
         super().__init__()
@@ -98,6 +99,7 @@ class MainWindow(QMainWindow):
 
         # Overview
         self.dashboard = DashboardWidget()
+        self.dashboard.paramChanged.connect(self._on_param_changed)
         self.stack.addWidget(_wrap_panel(self.dashboard, "Overview"))
 
         # Control Deck + Engine Outputs, side by side so you can watch outputs
@@ -150,9 +152,17 @@ class MainWindow(QMainWindow):
         wb_lay.addWidget(right_col, 1)
 
         self.stack.addWidget(_wrap_panel(workbench, "Control Deck",
-                                          desc="Adjust any of the 26 raw inputs on the left and watch all 39 "
+                                          desc="Adjust any of the 28 raw inputs on the left and watch all 44 "
                                                "computed outputs update instantly on the right. Click an output "
                                                "card to trace it in Dependency Mapping."))
+
+        # Optimizer — 3-mode (static/range/auto) parameter sweep + best-fit search
+        self.optimizer = OptimizerWidget()
+        self.optimizer.applyRequested.connect(self._on_apply_optimizer_design)
+        self.stack.addWidget(_wrap_panel(self.optimizer, "Optimizer",
+                                          desc="Pick Static / Range / Auto for each parameter, set acceptance "
+                                               "criteria, and let the tool search for the best feasible payload "
+                                               "design — with trade-study graphs for every Range parameter."))
 
         # Dependency Mapping (one tab per engine)
         self.map_tabs = QTabWidget()
@@ -180,10 +190,52 @@ class MainWindow(QMainWindow):
 
     def _on_nav(self, row):
         self.stack.setCurrentIndex(row)
+        if self.PAGES[row] == "Optimizer":
+            self.optimizer.sync_from_state(self.P)
+
+    def _on_apply_optimizer_design(self, best_P):
+        for key, value in best_P.items():
+            self.P[key] = value
+        self._recompute_and_refresh()
+        for key, value in best_P.items():
+            self.param_panel.set_value(key, value)
+        self.optimizer.sync_from_state(self.P)
+        self.optimizer.status_lbl.setText("Applied ✓ — opening Control Deck to show the new values…")
+        self.nav.setCurrentRow(self.PAGES.index("Control Deck"))
 
     def _on_param_changed(self, key, value):
         self.P[key] = value
+        self._apply_wavelength_link(key, value)
         self._recompute_and_refresh()
+        self.param_panel.set_value(key, value)
+
+    def _apply_wavelength_link(self, key, value):
+        """Keep Central/Min/Max wavelength physically consistent:
+        - editing Central shifts Min and Max together (same span, recentred)
+        - editing Min or Max recomputes Central as their midpoint
+        Guarded against re-entrant cascades with self._wl_syncing."""
+        if getattr(self, '_wl_syncing', False):
+            return
+        if key not in ('centralWavelength', 'minWavelength', 'maxWavelength'):
+            return
+        self._wl_syncing = True
+        try:
+            lo = self.P['minWavelength']
+            hi = self.P['maxWavelength']
+            if key == 'centralWavelength':
+                span_half = (hi - lo) / 2.0
+                new_lo = value - span_half
+                new_hi = value + span_half
+                self.P['minWavelength'] = new_lo
+                self.P['maxWavelength'] = new_hi
+                self.param_panel.set_value('minWavelength', new_lo)
+                self.param_panel.set_value('maxWavelength', new_hi)
+            else:  # minWavelength or maxWavelength edited
+                new_central = (self.P['minWavelength'] + self.P['maxWavelength']) / 2.0
+                self.P['centralWavelength'] = new_central
+                self.param_panel.set_value('centralWavelength', new_central)
+        finally:
+            self._wl_syncing = False
 
     def _on_output_clicked(self, engine_id, key):
         # jump to the Dependency Mapping page, correct engine tab, and select the node

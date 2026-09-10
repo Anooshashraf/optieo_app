@@ -1,5 +1,6 @@
 # model.py
 import math
+import itertools
 
 CONST = {'Re': 6371, 'mu': 398600.4418, 'h': 6.62607015e-34, 'c': 299792458}
 
@@ -18,10 +19,8 @@ GROUPS = [
     {'id': 'optics', 'label': 'Sensor Optics', 'color': '#2e9e6a', 'params': [
         {'k': 'aperture', 'label': 'Aperture Dia.', 'unit': 'm', 'min': 0.1, 'max': 3, 'step': 0.01, 'def': 1.1, 'decimals': 2},
         {'k': 'focalLength', 'label': 'Focal Length', 'unit': 'm', 'min': 1, 'max': 30, 'step': 0.1, 'def': 13.3, 'decimals': 1},
-        {'k': 'wavelengthRef', 'label': 'Wavelength (ref)', 'unit': 'nm', 'min': 300, 'max': 1000, 'step': 1, 'def': 625, 'decimals': 0},
-        {'k': 'centralWavelength', 'label': 'Central Wavelength', 'unit': 'nm', 'min': 300, 'max': 1000, 'step': 1, 'def': 625, 'decimals': 0},
-        {'k': 'bandwidth', 'label': 'Bandwidth', 'unit': 'nm', 'min': 10, 'max': 600, 'step': 1, 'def': 350, 'decimals': 0},
-        {'k': 'numBands', 'label': 'Number of Bands', 'unit': '', 'min': 1, 'max': 60, 'step': 1, 'def': 29, 'decimals': 0},
+        {'k': 'nfpm', 'label': 'No. of Focal Plane Modules', 'unit': '', 'min': 1, 'max': 12, 'step': 1, 'def': 1, 'decimals': 0},
+        {'k': 'gsdMS', 'label': 'GSD (Multispectral)', 'unit': 'm', 'min': 0.2, 'max': 20, 'step': 0.1, 'def': 2.4, 'decimals': 2},
     ]},
     {'id': 'integration', 'label': 'Sensor Integration', 'color': '#e2893d', 'params': [
         {'k': 'tdiStages', 'label': 'TDI Stages', 'unit': '', 'min': 1, 'max': 64, 'step': 1, 'def': 32, 'decimals': 0},
@@ -37,6 +36,15 @@ GROUPS = [
     {'id': 'pixel', 'label': 'Pixel & Data Rate', 'color': '#8a5fcc', 'params': [
         {'k': 'pixelPitch', 'label': 'Pixel Pitch', 'unit': 'µm', 'min': 2, 'max': 20, 'step': 0.1, 'def': 6.7, 'decimals': 1},
         {'k': 'bitDepth', 'label': 'Bit Depth', 'unit': 'bits', 'min': 8, 'max': 16, 'step': 1, 'def': 11, 'decimals': 0},
+    ]},
+    {'id': 'spectral', 'label': 'Spectral Band', 'color': '#9b8cff', 'params': [
+        {'k': 'wavelengthRef', 'label': 'Wavelength (ref)', 'unit': 'nm', 'min': 300, 'max': 1000, 'step': 1, 'def': 625, 'decimals': 0},
+        {'k': 'minWavelength', 'label': 'Min Wavelength', 'unit': 'nm', 'min': 250, 'max': 990, 'step': 1, 'def': 450, 'decimals': 0},
+        {'k': 'maxWavelength', 'label': 'Max Wavelength', 'unit': 'nm', 'min': 260, 'max': 2500, 'step': 1, 'def': 800, 'decimals': 0},
+        {'k': 'centralWavelength', 'label': 'Central Wavelength', 'unit': 'nm', 'min': 300, 'max': 1000, 'step': 1, 'def': 625, 'decimals': 0},
+        {'k': 'bandwidth', 'label': 'Bandwidth', 'unit': 'nm', 'min': 10, 'max': 600, 'step': 1, 'def': 350, 'decimals': 0},
+        {'k': 'numBands', 'label': 'Number of Bands', 'unit': '', 'min': 1, 'max': 60, 'step': 1, 'def': 29, 'decimals': 0},
+        {'k': 'transmission', 'label': 'Optical Transmission', 'unit': '%', 'min': 30, 'max': 100, 'step': 1, 'def': 85, 'decimals': 0},
     ]},
 ]
 
@@ -57,8 +65,11 @@ OUT_DEFS = [
     {'eng': 'spatial', 'k': 'gsdRatio', 'label': 'GSD Ratio', 'unit': ''},
     {'eng': 'spatial', 'k': 'motionBlur', 'label': 'Motion Blur', 'unit': 'm'},
     {'eng': 'spatial', 'k': 'blurPct', 'label': 'Blur %', 'unit': '%'},
-    {'eng': 'spatial', 'k': 'solidAngle', 'label': 'Solid Angle', 'unit': 'sr'},
-    {'eng': 'spatial', 'k': 'entranceApArea', 'label': 'Entrance Aperture Area', 'unit': 'm²'},
+    {'eng': 'spectral', 'k': 'solidAngle', 'label': 'Solid Angle', 'unit': 'sr'},
+    {'eng': 'spectral', 'k': 'entranceApArea', 'label': 'Entrance Aperture Area', 'unit': 'm²'},
+    {'eng': 'spectral', 'k': 'spectralCoverage', 'label': 'Spectral Coverage', 'unit': 'nm'},
+    {'eng': 'spectral', 'k': 'photonEnergy', 'label': 'Photon Energy', 'unit': 'J', 'sci': True},
+    {'eng': 'spectral', 'k': 'pixelPower', 'label': 'Pixel Power', 'unit': 'W', 'sci': True},
     {'eng': 'orbital', 'k': 'orbitalVel', 'label': 'Orbital Velocity', 'unit': 'km/s'},
     {'eng': 'orbital', 'k': 'groundTrackVel', 'label': 'Ground Track Velocity', 'unit': 'km/s'},
     {'eng': 'orbital', 'k': 'orbitPeriod', 'label': 'Orbit Period', 'unit': 'min'},
@@ -105,7 +116,8 @@ DEP = {
     'normFreq': ['pixelPitch', 'aperture', 'wavelengthRef', 'focalLength'],
     'mtfOptics': ['pixelPitch', 'aperture', 'wavelengthRef', 'focalLength'],
     'mtfSystem': ['pixelPitch', 'aperture', 'wavelengthRef', 'focalLength'],
-    'gsdRatio': ['altitude', 'numPixels', 'pixelPitch', 'focalLength', 'lookAngle'],
+    'gsdRatio': ['altitude', 'lookAngle', 'pixelPitch', 'focalLength', 'gsdMS'],
+    'spectralCoverage': ['minWavelength', 'maxWavelength'],
     'motionBlur': ['altitude', 'pixelPitch', 'focalLength', 'lookAngle'],
     'blurPct': ['altitude', 'pixelPitch', 'focalLength', 'lookAngle'],
     'pixelArea': ['pixelPitch'],
@@ -129,12 +141,12 @@ DEP = {
     'betaSummer': ['dayOfYear', 'inclination', 'ltan'],
     'betaWinter': ['dayOfYear', 'inclination', 'ltan'],
     'photonEnergy': ['centralWavelength'],
-    'pixelPower': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency'],
-    'signal': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'altitude', 'lookAngle', 'QE', 'centralWavelength'],
-    'shotNoise': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'altitude', 'lookAngle', 'QE', 'centralWavelength'],
-    'snrSingle': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'altitude', 'lookAngle', 'QE', 'centralWavelength'],
-    'effectiveSignal': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'altitude', 'lookAngle', 'QE', 'centralWavelength', 'tdiStages'],
-    'finalSNR': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'altitude', 'lookAngle', 'QE', 'centralWavelength', 'tdiStages', 'readNoise'],
+    'pixelPower': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'transmission'],
+    'signal': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'transmission', 'altitude', 'lookAngle', 'QE', 'centralWavelength'],
+    'shotNoise': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'transmission', 'altitude', 'lookAngle', 'QE', 'centralWavelength'],
+    'snrSingle': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'transmission', 'altitude', 'lookAngle', 'QE', 'centralWavelength'],
+    'effectiveSignal': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'transmission', 'altitude', 'lookAngle', 'QE', 'centralWavelength', 'tdiStages'],
+    'finalSNR': ['spectralRadiance', 'bandwidth', 'pixelPitch', 'focalLength', 'aperture', 'opticalEfficiency', 'transmission', 'altitude', 'lookAngle', 'QE', 'centralWavelength', 'tdiStages', 'readNoise'],
     'totalDigitalLevels': ['bitDepth'],
     'dynamicRange': ['fullWell', 'readNoise'],
     'rawDataRate': ['numPixels', 'bitDepth', 'altitude', 'pixelPitch', 'focalLength', 'lookAngle', 'numBands'],
@@ -162,7 +174,7 @@ def compute_all(P):
     nf = min(O['normFreq'], 0.999999)
     O['mtfOptics'] = (2 / math.pi) * (math.acos(nf) - nf * math.sqrt(1 - nf * nf))
     O['mtfSystem'] = O['mtfDetector'] * O['mtfOptics']
-    O['gsdRatio'] = O['swathWidth'] / O['GSD']
+    O['gsdRatio'] = O['GSD'] / P['gsdMS'] if P['gsdMS'] > 0 else 0
     
     # ORBITAL
     O['orbitalVel'] = math.sqrt(CONST['mu'] / (CONST['Re'] + P['altitude']))
@@ -193,7 +205,9 @@ def compute_all(P):
     
     # RADIOMETRIC
     O['photonEnergy'] = (CONST['h'] * CONST['c']) / (P['centralWavelength'] / 1e9)
-    O['pixelPower'] = P['spectralRadiance'] * (P['bandwidth'] / 1000) * O['pixelArea'] * O['solidAngle'] * (P['opticalEfficiency'] / 100)
+    O['pixelPower'] = (P['spectralRadiance'] * (P['bandwidth'] / 1000) * O['pixelArea'] * O['solidAngle']
+                       * (P['opticalEfficiency'] / 100) * (P['transmission'] / 100))
+    O['spectralCoverage'] = P['maxWavelength'] - P['minWavelength']
     O['signal'] = (O['pixelPower'] * O['integrationTime'] * (P['QE'] / 100)) / O['photonEnergy']
     O['shotNoise'] = math.sqrt(max(O['signal'], 0))
     O['snrSingle'] = O['signal'] / O['shotNoise'] if O['shotNoise'] > 0 else 0
@@ -219,6 +233,138 @@ def efficiency(O):
     dynamic = clamp01((O['dynamicRange'] - 30) / (85 - 30))
     overall = (spatial * 0.3 + radiometric * 0.3 + temporal * 0.2 + dynamic * 0.2) * 100
     return {'overall': overall, 'spatial': spatial*100, 'radiometric': radiometric*100, 'temporal': temporal*100, 'dynamic': dynamic*100}
+
+CRITERIA_OUTPUTS = [
+    {'k': 'GSD', 'label': 'Ground Sample Distance', 'unit': 'm', 'better': 'lower'},
+    {'k': 'finalSNR', 'label': 'Final SNR', 'unit': '', 'better': 'higher'},
+    {'k': 'actualRevisit', 'label': 'Revisit Time', 'unit': 'days', 'better': 'lower'},
+    {'k': 'dynamicRange', 'label': 'Dynamic Range', 'unit': 'dB', 'better': 'higher'},
+    {'k': 'swathWidth', 'label': 'Swath Width', 'unit': 'km', 'better': 'higher'},
+]
+
+
+def _sample_grid(lo, hi, n):
+    n = max(2, int(n))
+    if n == 1 or hi <= lo:
+        return [lo]
+    return [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+
+
+def run_optimizer(base_P, modes, criteria=None, max_combinations=3000):
+    """The payload trade-off optimizer.
+
+    modes: {param_key: {'mode': 'static'|'range'|'auto', 'lo':.., 'hi':.., 'n':..}}
+        - 'static'  -> value is taken from base_P and held fixed
+        - 'range'   -> swept over [lo, hi]; also produces a 1-D trade graph
+        - 'auto'    -> swept over [lo, hi] as part of the free search space,
+                       but is NOT plotted individually (it's "let the tool decide")
+    criteria: {output_key: (min_or_None, max_or_None)} acceptance bounds.
+    Returns a dict with the best feasible design, its outputs/score, how many
+    combinations were checked, and 1-D trade-study sweeps for every 'range' param.
+    """
+    criteria = criteria or {}
+    free_keys = [k for k, m in modes.items() if m['mode'] in ('range', 'auto')]
+    range_keys = [k for k, m in modes.items() if m['mode'] == 'range']
+
+    n_free = max(1, len(free_keys))
+    per_param_n = max(2, min(10, round(max_combinations ** (1.0 / n_free))))
+
+    grids = {}
+    for k in free_keys:
+        m = modes[k]
+        grids[k] = _sample_grid(m['lo'], m['hi'], m.get('n') or per_param_n)
+
+    def passes_criteria(O):
+        for out_k, (cmin, cmax) in criteria.items():
+            v = O.get(out_k)
+            if v is None:
+                continue
+            if cmin is not None and v < cmin:
+                return False
+            if cmax is not None and v > cmax:
+                return False
+        return True
+
+    best = None
+    best_score = -1.0
+    best_outputs = None
+    feasible_count = 0
+    total = 0
+    best_dist = None  # tie-break: distance from base_P, prefer closer (less arbitrary than "first found")
+
+    if free_keys:
+        combos = itertools.product(*(grids[k] for k in free_keys))
+    else:
+        combos = [()]
+
+    for combo in combos:
+        total += 1
+        trial = dict(base_P)
+        for k, v in zip(free_keys, combo):
+            trial[k] = v
+        O = compute_all(trial)
+        ok = passes_criteria(O)
+        if ok:
+            feasible_count += 1
+        eff = efficiency(O)['overall']
+        # feasible designs always outrank infeasible ones; among either group,
+        # higher mission-efficiency score wins. Ties (common for parameters
+        # that don't influence any criterion) are broken by preferring the
+        # value closest to the current/base design, not just "first found".
+        score = eff + (1000 if ok else 0)
+        dist = sum(abs(trial[k] - base_P[k]) / max(1e-9, (modes[k]['hi'] - modes[k]['lo'])) for k in free_keys) if free_keys else 0
+        is_better = (best is None or score > best_score + 1e-9 or
+                     (abs(score - best_score) <= 1e-9 and dist < best_dist))
+        if is_better:
+            best_score = score
+            best = trial
+            best_outputs = O
+            best_dist = dist
+
+    best_is_feasible = feasible_count > 0
+
+    # Post-process: for any free parameter whose value doesn't actually
+    # change the score (holding everything else fixed), snap it to its
+    # base/default value instead of leaving it at an arbitrary coarse-grid
+    # point. This is what makes "Auto" give a genuinely sensible number for
+    # parameters like Inclination/LTAN that this model's criteria don't
+    # depend on, rather than a coincidental grid value near an edge.
+    if best is not None:
+        for k in free_keys:
+            lo, hi = modes[k]['lo'], modes[k]['hi']
+            default_v = min(hi, max(lo, base_P[k]))
+            if abs(best[k] - default_v) < 1e-9:
+                continue
+            probe = dict(best)
+            probe[k] = default_v
+            O_probe = compute_all(probe)
+            score_probe = efficiency(O_probe)['overall'] + (1000 if passes_criteria(O_probe) else 0)
+            if score_probe >= best_score - 1e-6:
+                best[k] = default_v
+                best_outputs = O_probe
+                best_score = max(best_score, score_probe)
+
+    # 1-D trade-study sweep for each 'range' parameter, holding every other
+    # free parameter at its value in the best design found above
+    sweeps = {}
+    for rk in range_keys:
+        pts = []
+        for v in grids[rk]:
+            trial = dict(best) if best else dict(base_P)
+            trial[rk] = v
+            O = compute_all(trial)
+            pts.append({'x': v, 'outputs': O, 'score': efficiency(O)['overall'],
+                        'feasible': passes_criteria(O)})
+        scores = [pt['score'] for pt in pts]
+        flat = (max(scores) - min(scores)) < 0.5 if scores else True
+        sweeps[rk] = {'points': pts, 'flat': flat}
+
+    return {
+        'best_P': best, 'best_outputs': best_outputs, 'best_score': efficiency(best_outputs)['overall'] if best_outputs else 0,
+        'best_is_feasible': best_is_feasible, 'feasible_count': feasible_count, 'total_evaluated': total,
+        'sweeps': sweeps,
+    }
+
 
 def node_label(key):
     for d in OUT_DEFS:

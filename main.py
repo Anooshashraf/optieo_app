@@ -7,8 +7,13 @@ from optieo.main_window import MainWindow
 
 
 def main():
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True) if hasattr(
-        Qt.ApplicationAttribute, "AA_EnableHighDpiScaling") else None
+    # Must be set before the QApplication is constructed. On Windows with
+    # fractional display scaling (125%/150%), leaving this unset makes Qt
+    # round layout geometry inconsistently between the layout pass and the
+    # paint pass, which shows up as overlapping/"ghosted" label text.
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
     app = QApplication(sys.argv)
     app.setApplicationName("OPTIEO / EOSSP")
     win = MainWindow()

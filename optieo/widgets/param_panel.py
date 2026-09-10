@@ -119,3 +119,12 @@ class ParamPanel(QWidget):
 
     def values(self):
         return {k: r.spin.value() for k, r in self.rows.items()}
+
+    def set_value(self, key, val):
+        """Programmatically move a slider/spinbox (e.g. when the value was
+        changed from the Overview page's embedded geometry controls). Qt only
+        emits valueChanged when the value actually differs, so this is safe
+        to call from within a change-handler without causing a feedback loop."""
+        row = self.rows.get(key)
+        if row is not None:
+            row.set_value(val)
