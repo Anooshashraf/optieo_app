@@ -8,7 +8,6 @@ from optieo.main_window import MainWindow
 
 def main():
     # Must be set before the QApplication is constructed. On Windows with
-    # fractional display scaling (125%/150%), leaving this unset makes Qt
     # round layout geometry inconsistently between the layout pass and the
     # paint pass, which shows up as overlapping/"ghosted" label text.
     QApplication.setHighDpiScaleFactorRoundingPolicy(
